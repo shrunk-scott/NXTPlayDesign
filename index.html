@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AFL Football Preview – NXTPlay</title>
+    <title>AFL Football Preview – Laces, Toroidal Eyelets, Air Valve & Color Picker</title>
     <style>
       body {
         margin: 0;
@@ -78,9 +78,23 @@
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
-      /* Ensure any GUI (if present) is on top */
-      .dg {
-        z-index: 1000 !important;
+      /* Mobile adjustments */
+      @media (max-width: 768px) {
+        .logo {
+          top: 10px;
+          left: 10px;
+          width: 150px;
+        }
+        #colorInput {
+          width: 180px;
+        }
+        #button-container {
+          gap: 8px;
+        }
+        #file-button, #clear-button {
+          padding: 8px 16px;
+          font-size: 14px;
+        }
       }
     </style>
   </head>
@@ -125,7 +139,7 @@
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      // Add a HemisphereLight to better illuminate the ball
+      // Add a HemisphereLight to better illuminate the ball's color
       const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
       hemiLight.position.set(0, 20, 0);
       scene.add(hemiLight);
@@ -134,8 +148,9 @@
       // CREATE THE BASE FOOTBALL MODEL (A POINTIER AFL BALL)
       // -------------------------------------------------
       const footballGeometry = new THREE.SphereGeometry(1, 64, 64);
-      // Scale along the x-axis for an elongated AFL ball shape
+      // Scale along the x-axis for an elongated shape
       footballGeometry.scale(1.5, 1, 1);
+
       // Modify vertices to make the ends "pointier"
       const positions = footballGeometry.attributes.position;
       for (let i = 0; i < positions.count; i++) {
@@ -144,6 +159,7 @@
         positions.setX(i, x * factor);
       }
       positions.needsUpdate = true;
+
       const footballMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
       const football = new THREE.Mesh(footballGeometry, footballMaterial);
       football.renderOrder = 0;
@@ -293,7 +309,7 @@
         radius: 0.001,   // Main torus radius
         height: 0.025    // Tube radius of the torus (controls thickness)
       };
-      // Valve parameters for the air valve cylinder (defaults)
+      // Valve parameters for the air valve cylinder
       const valveParams = {
         radius: 0.03,    // Cylinder radius
         height: 0.02,    // Cylinder height
@@ -368,7 +384,7 @@
         updateValve();
       }
 
-      // Create or update the air valve (cylinder) between the 3rd and 4th laces (at t = 0.5 on the dorsal seam)
+      // Create or update the air valve (cylinder) between the 3rd and 4th laces (using t = 0.5 on the dorsal seam)
       function updateValve() {
         clearValve();
         const p_valve = dorsalSeamCurve.getPoint(0.5);
@@ -405,29 +421,33 @@
       });
 
       // -------------------------------------------------
-      // HANDLE COLOR INPUT
+      // HANDLE COLOR INPUT (with or without '#' prefix)
       // -------------------------------------------------
       document.getElementById("colorInput").addEventListener("input", function () {
-        const color = this.value.trim();
+        let color = this.value.trim();
         if (color === "") {
-          // Reset to white if blank
           if (football.material.map) {
             football.material.map.dispose();
             football.material.map = null;
           }
           football.material.color.set(0xffffff);
           football.material.needsUpdate = true;
-        } else if (/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)) {
-          if (football.material.map) {
-            football.material.map.dispose();
-            football.material.map = null;
+        } else {
+          if (!color.startsWith("#")) {
+            color = "#" + color;
           }
-          football.material.color.set(color);
-          football.material.needsUpdate = true;
+          if (/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)) {
+            if (football.material.map) {
+              football.material.map.dispose();
+              football.material.map = null;
+            }
+            football.material.color.set(color);
+            football.material.needsUpdate = true;
+          }
         }
       });
       document.getElementById("colorInput").addEventListener("change", function () {
-        const color = this.value.trim();
+        let color = this.value.trim();
         if (color === "") {
           if (football.material.map) {
             football.material.map.dispose();
@@ -435,13 +455,18 @@
           }
           football.material.color.set(0xffffff);
           football.material.needsUpdate = true;
-        } else if (/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)) {
-          if (football.material.map) {
-            football.material.map.dispose();
-            football.material.map = null;
+        } else {
+          if (!color.startsWith("#")) {
+            color = "#" + color;
           }
-          football.material.color.set(color);
-          football.material.needsUpdate = true;
+          if (/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)) {
+            if (football.material.map) {
+              football.material.map.dispose();
+              football.material.map = null;
+            }
+            football.material.color.set(color);
+            football.material.needsUpdate = true;
+          }
         }
       });
 
