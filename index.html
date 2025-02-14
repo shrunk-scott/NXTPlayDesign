@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AFL Football Preview – Laces, Toroidal Eyelets, & Air Valve</title>
+    <title>AFL Football Preview – NXTPlay</title>
     <style>
       body {
         margin: 0;
@@ -25,12 +25,27 @@
         height: auto;
         pointer-events: auto;
       }
-      /* iOS-styled button container for file upload and clear */
+      /* Container for color input and buttons, placed in bottom-right */
       #button-container {
         position: absolute;
         bottom: 10px;
         right: 10px;
         z-index: 2;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      /* iOS-styled color input */
+      #colorInput {
+        padding: 8px 12px;
+        border: 1px solid #ccc;
+        border-radius: 12px;
+        font-size: 16px;
+        width: 220px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      /* Row container for file and clear buttons */
+      #button-row {
         display: flex;
         gap: 12px;
       }
@@ -63,6 +78,10 @@
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
+      /* Ensure any GUI (if present) is on top */
+      .dg {
+        z-index: 1000 !important;
+      }
     </style>
   </head>
   <body>
@@ -71,10 +90,13 @@
       <img src="https://i.imgur.com/lIOr2wQ.png" alt="New Logo" class="logo" />
     </header>
 
-    <!-- Button container for file upload and clear -->
+    <!-- Container for color input and file/clear buttons -->
     <div id="button-container">
-      <label for="textureUpload" id="file-button">Choose File</label>
-      <button id="clear-button">Clear</button>
+      <input type="text" id="colorInput" placeholder="Enter #hex color" />
+      <div id="button-row">
+        <label for="textureUpload" id="file-button">Choose File</label>
+        <button id="clear-button">Clear</button>
+      </div>
       <input type="file" id="textureUpload" accept="image/*" />
     </div>
 
@@ -103,18 +125,16 @@
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      // Lighting
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambientLight);
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(5, 5, 5);
-      scene.add(directionalLight);
+      // Add a HemisphereLight to better illuminate the ball
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+      hemiLight.position.set(0, 20, 0);
+      scene.add(hemiLight);
 
       // -------------------------------------------------
       // CREATE THE BASE FOOTBALL MODEL (A POINTIER AFL BALL)
       // -------------------------------------------------
       const footballGeometry = new THREE.SphereGeometry(1, 64, 64);
-      // Scale along the x‑axis to form an elongated shape (AFL ball oriented along x)
+      // Scale along the x-axis for an elongated AFL ball shape
       footballGeometry.scale(1.5, 1, 1);
       // Modify vertices to make the ends "pointier"
       const positions = footballGeometry.attributes.position;
@@ -256,13 +276,11 @@
       scene.add(leftSeamMesh);
 
       // -------------------------------------------------
-      // ADD EXTRUDED CYLINDRICAL LACES WITH TOROIDAL EYELETS ALONG THE DORSAL SEAM
-      // AND AN AIR VALVE BETWEEN THE 3RD AND 4TH LACES
+      // ADD LACES, TOROIDAL EYELETS & AIR VALVE
       // -------------------------------------------------
       let laceMeshes = [];
       let eyeletMeshes = [];
       let valveMesh = null;
-      // Lace parameters (defaults)
       const laceParams = {
         numLaces: 6,         // 6 laces
         laceLength: 0.36,      // Lace length along the seam
@@ -271,12 +289,11 @@
         laceProtrusion: 0,     // Extrusion outward (0 means no extra extrusion)
         laceArch: -0.03        // Arch (negative for an inward arch)
       };
-      // Eyelet parameters (defaults)
       const eyeletParams = {
         radius: 0.001,   // Main torus radius
         height: 0.025    // Tube radius of the torus (controls thickness)
       };
-      // Valve parameters (defaults)
+      // Valve parameters for the air valve cylinder (defaults)
       const valveParams = {
         radius: 0.03,    // Cylinder radius
         height: 0.02,    // Cylinder height
@@ -351,7 +368,7 @@
         updateValve();
       }
 
-      // Create or update the air valve between the 3rd and 4th laces (using t = 0.5 on the dorsal seam)
+      // Create or update the air valve (cylinder) between the 3rd and 4th laces (at t = 0.5 on the dorsal seam)
       function updateValve() {
         clearValve();
         const p_valve = dorsalSeamCurve.getPoint(0.5);
@@ -388,6 +405,47 @@
       });
 
       // -------------------------------------------------
+      // HANDLE COLOR INPUT
+      // -------------------------------------------------
+      document.getElementById("colorInput").addEventListener("input", function () {
+        const color = this.value.trim();
+        if (color === "") {
+          // Reset to white if blank
+          if (football.material.map) {
+            football.material.map.dispose();
+            football.material.map = null;
+          }
+          football.material.color.set(0xffffff);
+          football.material.needsUpdate = true;
+        } else if (/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)) {
+          if (football.material.map) {
+            football.material.map.dispose();
+            football.material.map = null;
+          }
+          football.material.color.set(color);
+          football.material.needsUpdate = true;
+        }
+      });
+      document.getElementById("colorInput").addEventListener("change", function () {
+        const color = this.value.trim();
+        if (color === "") {
+          if (football.material.map) {
+            football.material.map.dispose();
+            football.material.map = null;
+          }
+          football.material.color.set(0xffffff);
+          football.material.needsUpdate = true;
+        } else if (/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)) {
+          if (football.material.map) {
+            football.material.map.dispose();
+            football.material.map = null;
+          }
+          football.material.color.set(color);
+          football.material.needsUpdate = true;
+        }
+      });
+
+      // -------------------------------------------------
       // ANIMATION LOOP & WINDOW RESIZE HANDLING
       // -------------------------------------------------
       function animate() {
@@ -407,8 +465,10 @@
       // CLEAR BUTTON EVENT HANDLER
       // -------------------------------------------------
       document.getElementById("clear-button").addEventListener("click", function () {
-        // Remove the skin texture by setting the material map to null
-        football.material.map = null;
+        if (football.material.map) {
+          football.material.map.dispose();
+          football.material.map = null;
+        }
         football.material.needsUpdate = true;
       });
     </script>
