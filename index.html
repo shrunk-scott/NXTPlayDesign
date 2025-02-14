@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AFL Football Preview – Laces, Toroidal Eyelets, Air Valve & Color Picker</title>
+    <title>AFL Football Preview – Improved UV Mapping & Controls</title>
     <style>
       body {
         margin: 0;
         overflow: hidden;
       }
-      /* Logo header styles with fixed defaults */
+      /* Logo header styles */
       #header {
         position: absolute;
         top: 0;
@@ -24,6 +24,14 @@
         width: 300px;
         height: auto;
         pointer-events: auto;
+      }
+      /* Mobile adjustments for logo */
+      @media (max-width: 768px) {
+        .logo {
+          top: 10px;
+          left: 10px;
+          width: 150px;
+        }
       }
       /* Container for color input and buttons, placed in bottom-right */
       #button-container {
@@ -78,13 +86,8 @@
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
-      /* Mobile adjustments */
+      /* Mobile adjustments for button container */
       @media (max-width: 768px) {
-        .logo {
-          top: 10px;
-          left: 10px;
-          width: 150px;
-        }
         #colorInput {
           width: 180px;
         }
@@ -108,7 +111,7 @@
     <div id="button-container">
       <input type="text" id="colorInput" placeholder="Enter #hex color" />
       <div id="button-row">
-        <label for="textureUpload" id="file-button">Choose File</label>
+        <label for="textureUpload" id="file-button">Choose Skin</label>
         <button id="clear-button">Clear</button>
       </div>
       <input type="file" id="textureUpload" accept="image/*" />
@@ -139,7 +142,7 @@
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      // Add a HemisphereLight to better illuminate the ball's color
+      // Add a HemisphereLight for even illumination
       const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
       hemiLight.position.set(0, 20, 0);
       scene.add(hemiLight);
@@ -148,17 +151,22 @@
       // CREATE THE BASE FOOTBALL MODEL (A POINTIER AFL BALL)
       // -------------------------------------------------
       const footballGeometry = new THREE.SphereGeometry(1, 64, 64);
-      // Scale along the x-axis for an elongated shape
+      // Scale along x to create an ellipsoid (a=1.5, b=c=1)
       footballGeometry.scale(1.5, 1, 1);
 
-      // Modify vertices to make the ends "pointier"
-      const positions = footballGeometry.attributes.position;
-      for (let i = 0; i < positions.count; i++) {
-        const x = positions.getX(i);
-        const factor = 1 + 0.05 * Math.pow(Math.abs(x) / 1.5, 3);
-        positions.setX(i, x * factor);
+      // Recalculate UVs for the ellipsoid:
+      const uvAttribute = footballGeometry.attributes.uv;
+      for (let i = 0; i < uvAttribute.count; i++){
+         // Get the vertex position
+         const pos = new THREE.Vector3().fromBufferAttribute(footballGeometry.attributes.position, i);
+         // Undo the x-scaling to recover original sphere coordinates
+         const spherePos = new THREE.Vector3(pos.x / 1.5, pos.y, pos.z).normalize();
+         // Calculate spherical coordinates
+         const u = (Math.atan2(spherePos.z, spherePos.x) + Math.PI) / (2 * Math.PI);
+         const v = Math.acos(spherePos.y) / Math.PI;
+         uvAttribute.setXY(i, u, v);
       }
-      positions.needsUpdate = true;
+      uvAttribute.needsUpdate = true;
 
       const footballMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
       const football = new THREE.Mesh(footballGeometry, footballMaterial);
@@ -202,32 +210,6 @@
         geom.computeVertexNormals();
         return geom;
       }
-      function ellipsoidGeodesic(start, end, segments = 20) {
-        const s = new THREE.Vector3(start.x / 1.5, start.y, start.z).normalize();
-        const e = new THREE.Vector3(end.x / 1.5, end.y, end.z).normalize();
-        const points = [];
-        let dot = s.dot(e);
-        dot = Math.max(-1, Math.min(1, dot));
-        const theta = Math.acos(dot);
-        for (let i = 0; i <= segments; i++) {
-          const t = i / segments;
-          let spherePoint;
-          if (theta === 0) {
-            spherePoint = s.clone();
-          } else {
-            const factor1 = Math.sin((1 - t) * theta) / Math.sin(theta);
-            const factor2 = Math.sin(t * theta) / Math.sin(theta);
-            spherePoint = s.clone().multiplyScalar(factor1).add(e.clone().multiplyScalar(factor2));
-          }
-          const ellipsoidPoint = new THREE.Vector3(
-            1.5 * spherePoint.x,
-            spherePoint.y,
-            spherePoint.z
-          );
-          points.push(ellipsoidPoint);
-        }
-        return points;
-      }
       function createExtrudedLaceGeometry(curve, width, protrusion, segments = 20) {
         return new THREE.TubeGeometry(curve, 40, width, 32, false);
       }
@@ -238,7 +220,7 @@
       const seamPointCount = 50;
       const xMin = -1.5, xMax = 1.5;
       const dorsalSeamPoints = [];
-      for (let i = 0; i <= seamPointCount; i++) {
+      for (let i = 0; i <= seamPointCount; i++){
         const t = i / seamPointCount;
         const x = xMin + (xMax - xMin) * t;
         const y = Math.sqrt(Math.max(0, 1 - (x / 1.5) ** 2));
@@ -246,7 +228,7 @@
       }
       const dorsalSeamCurve = new THREE.CatmullRomCurve3(dorsalSeamPoints);
       const ventralSeamPoints = [];
-      for (let i = 0; i <= seamPointCount; i++) {
+      for (let i = 0; i <= seamPointCount; i++){
         const t = i / seamPointCount;
         const x = xMin + (xMax - xMin) * t;
         const y = -Math.sqrt(Math.max(0, 1 - (x / 1.5) ** 2));
@@ -255,7 +237,7 @@
       const combinedSeamPoints = dorsalSeamPoints.concat(ventralSeamPoints.reverse());
       const combinedSeamCurve = new THREE.CatmullRomCurve3(combinedSeamPoints, true);
       const rightSeamPoints = [];
-      for (let i = 0; i <= seamPointCount; i++) {
+      for (let i = 0; i <= seamPointCount; i++){
         const t = i / seamPointCount;
         const x = xMin + (xMax - xMin) * t;
         const z = Math.sqrt(Math.max(0, 1 - (x / 1.5) ** 2));
@@ -263,7 +245,7 @@
       }
       const rightSeamCurve = new THREE.CatmullRomCurve3(rightSeamPoints);
       const leftSeamPoints = [];
-      for (let i = 0; i <= seamPointCount; i++) {
+      for (let i = 0; i <= seamPointCount; i++){
         const t = i / seamPointCount;
         const x = xMin + (xMax - xMin) * t;
         const z = -Math.sqrt(Math.max(0, 1 - (x / 1.5) ** 2));
@@ -298,22 +280,22 @@
       let eyeletMeshes = [];
       let valveMesh = null;
       const laceParams = {
-        numLaces: 6,         // 6 laces
-        laceLength: 0.36,      // Lace length along the seam
-        laceThickness: 0.026,  // Tube radius for the lace
-        laceSpacing: 0.05,     // Spacing along the dorsal seam
-        laceProtrusion: 0,     // Extrusion outward (0 means no extra extrusion)
-        laceArch: -0.03        // Arch (negative for an inward arch)
+        numLaces: 6,
+        laceLength: 0.36,
+        laceThickness: 0.026,
+        laceSpacing: 0.05,
+        laceProtrusion: 0,
+        laceArch: -0.03
       };
       const eyeletParams = {
-        radius: 0.001,   // Main torus radius
-        height: 0.025    // Tube radius of the torus (controls thickness)
+        radius: 0.001,
+        height: 0.025
       };
-      // Valve parameters for the air valve cylinder
+      // Valve parameters (defaults)
       const valveParams = {
-        radius: 0.03,    // Cylinder radius
-        height: 0.02,    // Cylinder height
-        extrusion: 0.02  // Extrusion from the surface
+        radius: 0.03,
+        height: 0.02,
+        extrusion: 0.02
       };
       const laceMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
       const eyeletMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
@@ -423,8 +405,8 @@
       // -------------------------------------------------
       // HANDLE COLOR INPUT (with or without '#' prefix)
       // -------------------------------------------------
-      document.getElementById("colorInput").addEventListener("input", function () {
-        let color = this.value.trim();
+      function updateFootballColor() {
+        let color = document.getElementById("colorInput").value.trim();
         if (color === "") {
           if (football.material.map) {
             football.material.map.dispose();
@@ -445,30 +427,9 @@
             football.material.needsUpdate = true;
           }
         }
-      });
-      document.getElementById("colorInput").addEventListener("change", function () {
-        let color = this.value.trim();
-        if (color === "") {
-          if (football.material.map) {
-            football.material.map.dispose();
-            football.material.map = null;
-          }
-          football.material.color.set(0xffffff);
-          football.material.needsUpdate = true;
-        } else {
-          if (!color.startsWith("#")) {
-            color = "#" + color;
-          }
-          if (/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)) {
-            if (football.material.map) {
-              football.material.map.dispose();
-              football.material.map = null;
-            }
-            football.material.color.set(color);
-            football.material.needsUpdate = true;
-          }
-        }
-      });
+      }
+      document.getElementById("colorInput").addEventListener("input", updateFootballColor);
+      document.getElementById("colorInput").addEventListener("change", updateFootballColor);
 
       // -------------------------------------------------
       // ANIMATION LOOP & WINDOW RESIZE HANDLING
@@ -494,7 +455,9 @@
           football.material.map.dispose();
           football.material.map = null;
         }
+        football.material.color.set(0xffffff);
         football.material.needsUpdate = true;
+        document.getElementById("colorInput").value = "";
       });
     </script>
   </body>
