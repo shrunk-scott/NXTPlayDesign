@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AFL Football Preview – Laces, Toroidal Eyelets, & Air Valve</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      /* Logo header styles with fixed defaults */
+      #header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        pointer-events: none;
+      }
+      .logo {
+        position: absolute;
+        top: 10px;
+        left: 700px;
+        width: 300px;
+        height: auto;
+        pointer-events: auto;
+      }
+      /* iOS-styled button container for file upload and clear */
+      #button-container {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        z-index: 2;
+        display: flex;
+        gap: 12px;
+      }
+      /* iOS-styled file button */
+      #file-button {
+        padding: 10px 20px;
+        background-color: #007AFF;
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      /* Hide the actual file input */
+      #textureUpload {
+        display: none;
+      }
+      /* iOS-styled Clear button */
+      #clear-button {
+        padding: 10px 20px;
+        background: #000;
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header with Logo -->
+    <header id="header">
+      <img src="https://i.imgur.com/lIOr2wQ.png" alt="New Logo" class="logo" />
+    </header>
+
+    <!-- Button container for file upload and clear -->
+    <div id="button-container">
+      <label for="textureUpload" id="file-button">Choose File</label>
+      <button id="clear-button">Clear</button>
+      <input type="file" id="textureUpload" accept="image/*" />
+    </div>
+
+    <!-- Include Three.js and OrbitControls from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+      // -------------------------------------------------
+      // SET UP SCENE, CAMERA, RENDERER, AND CONTROLS
+      // -------------------------------------------------
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f0f0);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(0, 0, 5);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(5, 5, 5);
+      scene.add(directionalLight);
+
+      // -------------------------------------------------
+      // CREATE THE BASE FOOTBALL MODEL (A POINTIER AFL BALL)
+      // -------------------------------------------------
+      const footballGeometry = new THREE.SphereGeometry(1, 64, 64);
+      // Scale along the x‑axis to form an elongated shape (AFL ball oriented along x)
+      footballGeometry.scale(1.5, 1, 1);
+      // Modify vertices to make the ends "pointier"
+      const positions = footballGeometry.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        const x = positions.getX(i);
+        const factor = 1 + 0.05 * Math.pow(Math.abs(x) / 1.5, 3);
+        positions.setX(i, x * factor);
+      }
+      positions.needsUpdate = true;
+      const footballMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+      const football = new THREE.Mesh(footballGeometry, footballMaterial);
+      football.renderOrder = 0;
+      scene.add(football);
+
+      // -------------------------------------------------
+      // HELPER FUNCTIONS
+      // -------------------------------------------------
+      function ellipsoidNormal(p) {
+        const n = new THREE.Vector3(p.x / (1.5 * 1.5), p.y, p.z);
+        return n.normalize();
+      }
+      function projectToEllipsoid(q) {
+        const sphere = new THREE.Vector3(q.x / 1.5, q.y, q.z);
+        sphere.normalize();
+        return new THREE.Vector3(1.5 * sphere.x, sphere.y, sphere.z);
+      }
+      function createSeamGeometry(curve, offset, segments = 50) {
+        const vertices = [];
+        const indices = [];
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments;
+          const p = curve.getPoint(t);
+          const n = ellipsoidNormal(p);
+          vertices.push(p.x, p.y, p.z);
+          const inner = new THREE.Vector3().copy(p).addScaledVector(n, -offset);
+          vertices.push(inner.x, inner.y, inner.z);
+        }
+        for (let i = 0; i < segments; i++) {
+          const i0 = i * 2;
+          const i1 = i * 2 + 1;
+          const i2 = (i + 1) * 2;
+          const i3 = (i + 1) * 2 + 1;
+          indices.push(i0, i1, i2);
+          indices.push(i1, i3, i2);
+        }
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+        geom.setIndex(indices);
+        geom.computeVertexNormals();
+        return geom;
+      }
+      function ellipsoidGeodesic(start, end, segments = 20) {
+        const s = new THREE.Vector3(start.x / 1.5, start.y, start.z).normalize();
+        const e = new THREE.Vector3(end.x / 1.5, end.y, end.z).normalize();
+        const points = [];
+        let dot = s.dot(e);
+        dot = Math.max(-1, Math.min(1, dot));
+        const theta = Math.acos(dot);
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments;
+          let spherePoint;
+          if (theta === 0) {
+            spherePoint = s.clone();
+          } else {
+            const factor1 = Math.sin((1 - t) * theta) / Math.sin(theta);
+            const factor2 = Math.sin(t * theta) / Math.sin(theta);
+            spherePoint = s.clone().multiplyScalar(factor1).add(e.clone().multiplyScalar(factor2));
+          }
+          const ellipsoidPoint = new THREE.Vector3(
+            1.5 * spherePoint.x,
+            spherePoint.y,
+            spherePoint.z
+          );
+          points.push(ellipsoidPoint);
+        }
+        return points;
+      }
+      function createExtrudedLaceGeometry(curve, width, protrusion, segments = 20) {
+        return new THREE.TubeGeometry(curve, 40, width, 32, false);
+      }
+
+      // -------------------------------------------------
+      // DEFINE SEAM CURVES
+      // -------------------------------------------------
+      const seamPointCount = 50;
+      const xMin = -1.5, xMax = 1.5;
+      const dorsalSeamPoints = [];
+      for (let i = 0; i <= seamPointCount; i++) {
+        const t = i / seamPointCount;
+        const x = xMin + (xMax - xMin) * t;
+        const y = Math.sqrt(Math.max(0, 1 - (x / 1.5) ** 2));
+        dorsalSeamPoints.push(new THREE.Vector3(x, y, 0));
+      }
+      const dorsalSeamCurve = new THREE.CatmullRomCurve3(dorsalSeamPoints);
+      const ventralSeamPoints = [];
+      for (let i = 0; i <= seamPointCount; i++) {
+        const t = i / seamPointCount;
+        const x = xMin + (xMax - xMin) * t;
+        const y = -Math.sqrt(Math.max(0, 1 - (x / 1.5) ** 2));
+        ventralSeamPoints.push(new THREE.Vector3(x, y, 0));
+      }
+      const combinedSeamPoints = dorsalSeamPoints.concat(ventralSeamPoints.reverse());
+      const combinedSeamCurve = new THREE.CatmullRomCurve3(combinedSeamPoints, true);
+      const rightSeamPoints = [];
+      for (let i = 0; i <= seamPointCount; i++) {
+        const t = i / seamPointCount;
+        const x = xMin + (xMax - xMin) * t;
+        const z = Math.sqrt(Math.max(0, 1 - (x / 1.5) ** 2));
+        rightSeamPoints.push(new THREE.Vector3(x, 0, z));
+      }
+      const rightSeamCurve = new THREE.CatmullRomCurve3(rightSeamPoints);
+      const leftSeamPoints = [];
+      for (let i = 0; i <= seamPointCount; i++) {
+        const t = i / seamPointCount;
+        const x = xMin + (xMax - xMin) * t;
+        const z = -Math.sqrt(Math.max(0, 1 - (x / 1.5) ** 2));
+        leftSeamPoints.push(new THREE.Vector3(x, 0, z));
+      }
+      const leftSeamCurve = new THREE.CatmullRomCurve3(leftSeamPoints);
+
+      // -------------------------------------------------
+      // CREATE SEAM MESHES
+      // -------------------------------------------------
+      const seamMaterial = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+        polygonOffsetUnits: -6,
+      });
+      const seamOffset = 0.03;
+      const combinedSeamMesh = new THREE.Mesh(createSeamGeometry(combinedSeamCurve, seamOffset), seamMaterial);
+      combinedSeamMesh.renderOrder = 10;
+      scene.add(combinedSeamMesh);
+      const rightSeamMesh = new THREE.Mesh(createSeamGeometry(rightSeamCurve, seamOffset), seamMaterial);
+      rightSeamMesh.renderOrder = 10;
+      scene.add(rightSeamMesh);
+      const leftSeamMesh = new THREE.Mesh(createSeamGeometry(leftSeamCurve, seamOffset), seamMaterial);
+      leftSeamMesh.renderOrder = 10;
+      scene.add(leftSeamMesh);
+
+      // -------------------------------------------------
+      // ADD EXTRUDED CYLINDRICAL LACES WITH TOROIDAL EYELETS ALONG THE DORSAL SEAM
+      // AND AN AIR VALVE BETWEEN THE 3RD AND 4TH LACES
+      // -------------------------------------------------
+      let laceMeshes = [];
+      let eyeletMeshes = [];
+      let valveMesh = null;
+      // Lace parameters (defaults)
+      const laceParams = {
+        numLaces: 6,         // 6 laces
+        laceLength: 0.36,      // Lace length along the seam
+        laceThickness: 0.026,  // Tube radius for the lace
+        laceSpacing: 0.05,     // Spacing along the dorsal seam
+        laceProtrusion: 0,     // Extrusion outward (0 means no extra extrusion)
+        laceArch: -0.03        // Arch (negative for an inward arch)
+      };
+      // Eyelet parameters (defaults)
+      const eyeletParams = {
+        radius: 0.001,   // Main torus radius
+        height: 0.025    // Tube radius of the torus (controls thickness)
+      };
+      // Valve parameters (defaults)
+      const valveParams = {
+        radius: 0.03,    // Cylinder radius
+        height: 0.02,    // Cylinder height
+        extrusion: 0.02  // Extrusion from the surface
+      };
+      const laceMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+      const eyeletMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+      const valveMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+      function clearLaces() {
+        laceMeshes.forEach(mesh => scene.remove(mesh));
+        laceMeshes = [];
+      }
+      function clearEyelets() {
+        eyeletMeshes.forEach(mesh => scene.remove(mesh));
+        eyeletMeshes = [];
+      }
+      function clearValve() {
+        if (valveMesh !== null) {
+          scene.remove(valveMesh);
+          valveMesh = null;
+        }
+      }
+      function updateLaces() {
+        clearLaces();
+        clearEyelets();
+        clearValve();
+        for (let i = 0; i < laceParams.numLaces; i++) {
+          const t = 0.5 + (i - (laceParams.numLaces - 1) / 2) * laceParams.laceSpacing;
+          const tClamped = Math.min(Math.max(t, 0.05), 0.95);
+          const p = dorsalSeamCurve.getPoint(tClamped);
+          const tangent = dorsalSeamCurve.getTangent(tClamped);
+          const n = ellipsoidNormal(p);
+          const laceDir = new THREE.Vector3().crossVectors(n, tangent).normalize();
+          const halfLength = laceParams.laceLength / 2;
+          const startCandidate = p.clone().add(laceDir.clone().multiplyScalar(-halfLength));
+          const endCandidate = p.clone().add(laceDir.clone().multiplyScalar(halfLength));
+          const start = projectToEllipsoid(startCandidate);
+          const end = projectToEllipsoid(endCandidate);
+
+          const mid = start.clone().add(end).multiplyScalar(0.5);
+          const radial = mid.clone().normalize();
+          const chord = end.clone().sub(start).normalize();
+          const archDir = new THREE.Vector3().crossVectors(chord, new THREE.Vector3().crossVectors(chord, radial)).normalize();
+          mid.add(archDir.multiplyScalar(laceParams.laceArch));
+
+          const laceCurve = new THREE.CatmullRomCurve3([start, mid, end]);
+          const laceGeo = createExtrudedLaceGeometry(laceCurve, laceParams.laceThickness, laceParams.laceProtrusion, 20);
+          const laceMesh = new THREE.Mesh(laceGeo, laceMaterial);
+          laceMesh.renderOrder = 11;
+          scene.add(laceMesh);
+          laceMeshes.push(laceMesh);
+
+          const startNormal = ellipsoidNormal(start);
+          const endNormal = ellipsoidNormal(end);
+          const eyeletGeom = new THREE.TorusGeometry(eyeletParams.radius, eyeletParams.height, 16, 32);
+          
+          const startEyelet = new THREE.Mesh(eyeletGeom, eyeletMaterial);
+          startEyelet.position.copy(start);
+          startEyelet.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), startNormal);
+          startEyelet.renderOrder = 12;
+          scene.add(startEyelet);
+          eyeletMeshes.push(startEyelet);
+          
+          const endEyelet = new THREE.Mesh(eyeletGeom.clone(), eyeletMaterial);
+          endEyelet.position.copy(end);
+          endEyelet.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), endNormal);
+          endEyelet.renderOrder = 12;
+          scene.add(endEyelet);
+          eyeletMeshes.push(endEyelet);
+        }
+        updateValve();
+      }
+
+      // Create or update the air valve between the 3rd and 4th laces (using t = 0.5 on the dorsal seam)
+      function updateValve() {
+        clearValve();
+        const p_valve = dorsalSeamCurve.getPoint(0.5);
+        const n_valve = ellipsoidNormal(p_valve);
+        const valvePos = p_valve.clone().add(n_valve.clone().multiplyScalar(valveParams.extrusion));
+        const valveGeom = new THREE.CylinderGeometry(valveParams.radius, valveParams.radius, valveParams.height, 32);
+        valveMesh = new THREE.Mesh(valveGeom, valveMaterial);
+        valveMesh.position.copy(valvePos);
+        valveMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n_valve);
+        valveMesh.renderOrder = 12;
+        scene.add(valveMesh);
+      }
+
+      updateLaces();
+
+      // -------------------------------------------------
+      // HANDLE SKIN UPLOAD
+      // -------------------------------------------------
+      document.getElementById("textureUpload").addEventListener("change", function (event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = new Image();
+          img.src = e.target.result;
+          img.onload = function () {
+            const texture = new THREE.Texture(img);
+            texture.needsUpdate = true;
+            football.material.map = texture;
+            football.material.needsUpdate = true;
+          };
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // -------------------------------------------------
+      // ANIMATION LOOP & WINDOW RESIZE HANDLING
+      // -------------------------------------------------
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener("resize", function () {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // -------------------------------------------------
+      // CLEAR BUTTON EVENT HANDLER
+      // -------------------------------------------------
+      document.getElementById("clear-button").addEventListener("click", function () {
+        // Remove the skin texture by setting the material map to null
+        football.material.map = null;
+        football.material.needsUpdate = true;
+      });
+    </script>
+  </body>
+</html>
